@@ -12,6 +12,24 @@ window.LEVEL_CONFIG = window.LEVEL_CONFIG || {
   ghostsEnabled: 4   // default to all 4 viruses
 };
 
+// ----- Level gate: don't allow skipping levels -----
+(function enforceLevelProgression() {
+  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+  const highestCompleted = Number(localStorage.getItem("levelCompleted") || 0);
+
+  // To play level N, you must have completed at least level N-1
+  if (currentLevel > 1 && highestCompleted < currentLevel - 1) {
+    // Decide which level the player *is* allowed to play:
+    // if they've never completed anything, send them to level1,
+    // otherwise send them to highestCompleted + 1.
+    const nextPlayableLevel = (highestCompleted || 0) + 1;
+
+    // Redirect inside the GitHub game (works whether embedded in Wix or not)
+    window.location.href = `level${nextPlayableLevel}.html`;
+  }
+})();
+
+
 // Logical tile size
 const TILE_SIZE = 24;
 
