@@ -12,22 +12,27 @@ window.LEVEL_CONFIG = window.LEVEL_CONFIG || {
   ghostsEnabled: 4   // default to all 4 viruses
 };
 
+const WIX_HOME_URL = "https://shadasalah29.wixsite.com/covid19-interactive";
+
+
 // ----- Level gate: don't allow skipping levels -----
 (function enforceLevelProgression() {
-  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+  const currentLevel = Number(window.LEVEL_CONFIG.levelNumber || 1);
   const highestCompleted = Number(localStorage.getItem("levelCompleted") || 0);
 
-  // To play level N, you must have completed at least level N-1
-  if (currentLevel > 1 && highestCompleted < currentLevel - 1) {
-    // Decide which level the player *is* allowed to play:
-    // if they've never completed anything, send them to level1,
-    // otherwise send them to highestCompleted + 1.
-    const nextPlayableLevel = (highestCompleted || 0) + 1;
+  console.log("Gate check:", { currentLevel, highestCompleted });
 
-    // Redirect inside the GitHub game (works whether embedded in Wix or not)
-    window.location.href = `level${nextPlayableLevel}.html`;
+  // To play level N (>1), you must have completed at least level N-1
+  if (currentLevel > 1 && highestCompleted < currentLevel - 1) {
+    // Just send them back to the Wix home page in THIS tab
+    if (WIX_HOME_URL) {
+      window.location.href = WIX_HOME_URL;
+    } else {
+      window.location.href = "level1.html"; // fallback
+    }
   }
 })();
+
 
 
 // Logical tile size
@@ -635,8 +640,6 @@ function restartGame() {
   }
 }
 
-// ----- Win condition with level progression -----
-// ----- Win condition with level progression -----
 function triggerWin() {
   gameState = "win";
 
@@ -646,7 +649,7 @@ function triggerWin() {
     localStorage.setItem("levelCompleted", currentLevel);
   }
 
-  // Map levels → Wix info pages
+  // Map levels to Wix info pages
   const wixInfoUrls = {
     1: "https://shadasalah29.wixsite.com/covid19-interactive/about-1",
     2: "https://shadasalah29.wixsite.com/covid19-interactive/level-2",
@@ -657,15 +660,15 @@ function triggerWin() {
   const target = wixInfoUrls[currentLevel];
 
   if (target) {
-    // Open the Wix info page in a new tab/window.
-    // This works much more reliably from inside an iframe.
-    window.open(target, "_blank");
+    // Navigate in the SAME tab (no new tab anymore)
+    window.location.href = target;
     return;
   }
 
-  // Fallback to old behavior if no Wix URL defined
+  // Fallback if no Wix URL defined
   window.location.href = `info${currentLevel}.html`;
 }
+
 
 
 
