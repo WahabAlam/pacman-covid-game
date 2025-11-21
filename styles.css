@@ -1,0 +1,142 @@
+/* ===== Global reset & layout ===== */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+/* Center everything on the page */
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;   /* horizontal centering */
+  align-items: center;       /* vertical centering */
+  background: #000000;       /* black background like original Pac-Man */
+  font-family: Arial, sans-serif;
+  color: #ffffff;
+}
+
+/* ========================================================= */
+/* ========== Layout for game + side panel ================= */
+/* ========================================================= */
+
+#game-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Game canvas */
+/* Game canvas */
+#gameCanvas {
+  display: block;
+  flex-shrink: 0;
+
+  /* Let the game scale nicely on bigger screens */
+  width: 90vmin;       /* 90% of the smaller viewport dimension */
+  max-width: 70vmin;   /* when panel is visible, keep it a bit smaller */
+  height: auto;        /* keep aspect ratio based on the JS-set size */
+
+  /* NEW: tight outer "second wall" right at the edge of the maze */
+  border: 1px solid #0044ff;   /* thin blue border = outer wall */
+  border-radius: 3px;
+
+  /* Smaller, closer glow so it hugs the border instead of floating far out */
+  box-shadow:
+    0 0 10px rgba(0, 191, 255, 0.45),
+    0 0 20px rgba(0, 90, 200, 0.35);
+}
+
+
+/* ===== Side panel styling ===== */
+.side-panel {
+  width: 260px;
+  background: #111;
+  border-radius: 8px;
+  padding: 16px 18px;
+  box-shadow: 0 0 14px rgba(0, 191, 255, 0.4);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Small HUD block at top of side panel */
+.panel-hud {
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.panel-hud div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.panel-hud span:first-child {
+  color: #aaaaaa;
+}
+
+.panel-hud span:last-child {
+  font-weight: bold;
+  color: #00ffff;
+}
+
+.panel-divider {
+  border: none;
+  border-top: 1px solid rgba(0, 191, 255, 0.3);
+  margin: 6px 0 12px;
+}
+
+.side-panel h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 20px;
+  color: #00ffff;
+}
+
+.side-panel h3 {
+  margin-top: 16px;
+  margin-bottom: 6px;
+  font-size: 16px;
+  color: #00bfff;
+}
+
+.side-panel ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.side-panel li {
+  margin-bottom: 6px;
+}
+
+/* Make keys look like keyboard keys */
+.side-panel kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-right: 2px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #222;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+}
+
+/* ===== Responsive: stack panel under game on small screens ===== */
+@media (max-width: 900px) {
+  #game-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #gameCanvas {
+    max-width: 90vmin;
+  }
+
+  .side-panel {
+    width: 100%;
+    max-width: 380px;
+  }
+}

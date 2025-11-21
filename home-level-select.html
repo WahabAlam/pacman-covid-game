@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pac-Man Levels</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    .btn-row {
+      margin-top: 20px;
+    }
+    button {
+      padding: 15px 30px;
+      margin: 10px;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button[disabled] {
+      background: #555;
+      cursor: not-allowed;
+      color: #ccc;
+    }
+    button:not([disabled]) {
+      background: #00bfff;
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Pac-Man: COVID-19 Awareness</h1>
+  <p>Beat each level to unlock new information about COVID-19.</p>
+
+  <div class="btn-row">
+    <button onclick="location.href='level1.html'">Level 1</button>
+    <button id="lvl2" disabled onclick="location.href='level2.html'">Level 2</button>
+    <button id="lvl3" disabled onclick="location.href='level3.html'">Level 3</button>
+    <button id="lvl4" disabled onclick="location.href='level4.html'">Level 4</button>
+  </div>
+
+  <script>
+    // Unlock levels based on saved progress
+    document.addEventListener("DOMContentLoaded", () => {
+      const completed = Number(localStorage.getItem("levelCompleted") || 0);
+
+      if (completed >= 1) document.getElementById("lvl2").disabled = false;
+      if (completed >= 2) document.getElementById("lvl3").disabled = false;
+      if (completed >= 3) document.getElementById("lvl4").disabled = false;
+    });
+  </script>
+
+</body>
+</html>

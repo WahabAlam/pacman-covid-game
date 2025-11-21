@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pac-Man Level 1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-wrapper">
+    <!-- Game canvas -->
+    <canvas id="gameCanvas" width="840" height="600"></canvas>
+
+    <!-- Side panel with HUD + controls -->
+    <aside class="side-panel">
+      <div class="panel-hud">
+        <div><span>Score</span><span id="scoreDisplay">0</span></div>
+        <div><span>Lives</span><span id="livesDisplay">3</span></div>
+      </div>
+      <hr class="panel-divider">
+
+      <h2>Controls</h2>
+      <ul>
+        <li><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> – Move Pac-Man</li>
+        <li><kbd>P</kbd> – Pause / Resume</li>
+        <li><kbd>H</kbd> – Go to Home (while paused)</li>
+        <li><kbd>Space</kbd> – Continue after you die</li>
+        <li><kbd>R</kbd> – Restart after Game Over / Win</li>
+      </ul>
+
+      <h3>Goal</h3>
+      <p>
+        Eat all the pellets to clear the level and unlock the next COVID-19 info page.
+        Avoid the ghosts unless you’ve just eaten a power pellet!
+      </p>
+    </aside>
+  </div>
+
+  <img id="memeOverlay" style="display:none;">
+
+  <script src="level-config/level1.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
