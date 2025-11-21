@@ -34,7 +34,6 @@ const WIX_HOME_URL = "https://shadasalah29.wixsite.com/covid19-interactive";
 })();
 
 
-
 // Logical tile size
 const TILE_SIZE = 24;
 
@@ -214,6 +213,29 @@ function spawnSyringe() {
   syringeActive = true;
 }
 
+// ----- Level intro text helper -----
+function getLevelIntroLines() {
+  const lvl = window.LEVEL_CONFIG.levelNumber || 1;
+
+  if (lvl === SYRINGE_LEVEL) {
+    return [
+      `Level ${lvl} – Final Dose`,
+      "1) Eat ALL power pellets (big pills).",
+      "2) A syringe will appear somewhere in the maze.",
+      "3) Grab the syringe to win the level.",
+      "Press Space / Enter / P to start"
+    ];
+  }
+
+  return [
+    `Level ${lvl}`,
+    "Use the arrow keys to move.",
+    "Eat all the pellets to clear the level.",
+    "Avoid the viruses unless powered up.",
+    "Press Space / Enter / P to start"
+  ];
+}
+
 // ----- Virus room (ghost house) geometry -----
 // Door is the path tile just above the center of the 1×4 indent:
 // indent is cols 12–15 => center at col 13.5 -> door tile row 5, col 13.
@@ -288,7 +310,7 @@ ghosts.forEach((g, i) => {
 
 // ----- Input -----
 window.addEventListener("keydown", e => {
-  // Intro popup (level 4)
+  // Intro popup (all levels)
   if (
     gameState === "intro" &&
     (e.key === " " || e.key === "Enter" || e.key === "p" || e.key === "P")
@@ -630,14 +652,10 @@ function restartGame() {
   pacman.powerTimer = 0;
 
   resetSyringe();   // 🔹 reset syringe state on restart
-
   resetAfterDeath();      // puts Pac-Man & ghosts back and sets gameState="playing"
 
-  // 🔹 If this is level 4, start in "intro" instead of immediately playing
-  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
-  if (currentLevel === SYRINGE_LEVEL) {
-    gameState = "intro";
-  }
+  // 🔹 ALL levels: start in intro instead of immediately playing
+  gameState = "intro";
 }
 
 function triggerWin() {
@@ -668,9 +686,6 @@ function triggerWin() {
   // Fallback if no Wix URL defined
   window.location.href = `info${currentLevel}.html`;
 }
-
-
-
 
 function checkWin() {
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
@@ -797,7 +812,7 @@ function drawMaze() {
   ctx.restore();
 
   // ============================================
-  // 2) Draw pellets and power pills (unchanged)
+  // 2) Draw pellets and power pills
   // ============================================
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -929,19 +944,24 @@ function drawHUD() {
     ctx.font = "20px Arial";
     ctx.fillText("Press P to Resume or H for Home", canvas.width / 2, canvas.height / 2 + 25);
   } else if (gameState === "intro") {
-    // 🔹 Level 4 intro popup
+    // Generic level intro popup (all levels)
+    const lines = getLevelIntroLines();
+
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, canvas.height / 2 - 90, canvas.width, 180);
+
     ctx.fillStyle = "#fff";
-    ctx.font = "30px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("Level 4 – New Rule!", canvas.width / 2, canvas.height / 2 - 40);
+
+    // Title
+    ctx.font = "30px Arial";
+    ctx.fillText(lines[0], canvas.width / 2, canvas.height / 2 - 40);
+
+    // Body lines
     ctx.font = "18px Arial";
-    ctx.fillText("1) Eat ALL power pellets first.", canvas.width / 2, canvas.height / 2 - 10);
-    ctx.fillText("2) A syringe will appear somewhere in the maze.", canvas.width / 2, canvas.height / 2 + 15);
-    ctx.fillText("3) Grab the syringe to clear the level.", canvas.width / 2, canvas.height / 2 + 40);
-    ctx.font = "16px Arial";
-    ctx.fillText("Press Space / Enter / P to start", canvas.width / 2, canvas.height / 2 + 70);
+    for (let i = 1; i < lines.length; i++) {
+      ctx.fillText(lines[i], canvas.width / 2, canvas.height / 2 - 40 + i * 24);
+    }
   }
 }
 
@@ -989,5 +1009,5 @@ function gameLoop(timestamp) {
 }
 
 // Start the game
-restartGame();
+restartGame();          // sets gameState = "intro" for the current level
 requestAnimationFrame(gameLoop);
