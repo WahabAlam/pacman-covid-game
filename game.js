@@ -836,19 +836,33 @@ function drawMaze() {
       const y = r * TILE_SIZE;
 
       // normal pellets
+      // normal pellets – brighter & larger with a glow
       if (tileCurrent === "." && !isGhostHouseTile(r, c)) {
         const cx = x + TILE_SIZE / 2;
         const cy = y + TILE_SIZE / 2;
+
+        // bright glowing dot behind the pellet
+        ctx.save();
+        ctx.fillStyle = "#fff6a0"; // bright yellow-ish
+        ctx.shadowColor = "rgba(255, 255, 180, 0.9)";
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, TILE_SIZE * 0.16, 0, Math.PI * 2); // a bit bigger than before
+        ctx.fill();
+        ctx.restore();
+
+        // draw the pellet image slightly larger on top (or fallback circle)
+        const size = TILE_SIZE * 0.4; // was 0.3 → more visible
         if (pelletImg.complete && pelletImg.naturalWidth) {
-          const size = TILE_SIZE * 0.3;
           ctx.drawImage(pelletImg, cx - size / 2, cy - size / 2, size, size);
         } else {
-          ctx.fillStyle = "#ffb8ae";
+          ctx.fillStyle = "#ffffd0";
           ctx.beginPath();
-          ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+          ctx.arc(cx, cy, TILE_SIZE * 0.18, 0, Math.PI * 2);
           ctx.fill();
         }
       }
+
 
       // power pellets (pills)
       else if (tileCurrent === "o") {
