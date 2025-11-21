@@ -661,6 +661,12 @@ function restartGame() {
 function triggerWin() {
   gameState = "win";
 
+  // 🔇 Stop all sounds so nothing keeps playing in the background
+  sndChomp.pause();  sndChomp.currentTime = 0;
+  sndDeath.pause();  sndDeath.currentTime = 0;
+  sndEatFruit.pause(); sndEatFruit.currentTime = 0;
+  sndEatGhost.pause(); sndEatGhost.currentTime = 0;
+
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
   const prevCompleted = Number(localStorage.getItem("levelCompleted") || 0);
   if (currentLevel > prevCompleted) {
@@ -678,14 +684,23 @@ function triggerWin() {
   const target = wixInfoUrls[currentLevel];
 
   if (target) {
-    // Navigate in the SAME tab (no new tab anymore)
-    window.location.href = target;
+    // Try to navigate the TOP window (for Wix iframe) in the SAME tab
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = target;
+      } else {
+        window.location.href = target;
+      }
+    } catch (e) {
+      window.location.href = target;
+    }
     return;
   }
 
   // Fallback if no Wix URL defined
   window.location.href = `info${currentLevel}.html`;
 }
+
 
 function checkWin() {
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
