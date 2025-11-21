@@ -628,10 +628,10 @@ function triggerWin() {
     localStorage.setItem("levelCompleted", currentLevel);
   }
 
-  // ⬇️ NEW: map levels to your Wix info pages
+  // Map levels → Wix info pages
   const wixInfoUrls = {
-    1: "https://shadasalah29.wixsite.com/covid19-interactive/about-1", // Level 1 → Info page 1
-    2: "https://shadasalah29.wixsite.com/covid19-interactive/level-2", // (optional, fill in later)
+    1: "https://shadasalah29.wixsite.com/covid19-interactive/about-1",
+    2: "https://shadasalah29.wixsite.com/covid19-interactive/level-2",
     3: "https://shadasalah29.wixsite.com/covid19-interactive/level-3",
     4: "https://shadasalah29.wixsite.com/covid19-interactive/level-4"
   };
@@ -639,17 +639,16 @@ function triggerWin() {
   const target = wixInfoUrls[currentLevel];
 
   if (target) {
-    // Use top so we break out of the iframe and show the full Wix page
-    if (window.top) {
-      window.top.location.href = target;
-    } else {
-      window.location.href = target;
-    }
-  } else {
-    // Fallback to old behavior if no Wix URL defined
-    window.location.href = `info${currentLevel}.html`;
+    // Open the Wix info page in a new tab/window.
+    // This works much more reliably from inside an iframe.
+    window.open(target, "_blank");
+    return;
   }
+
+  // Fallback to old behavior if no Wix URL defined
+  window.location.href = `info${currentLevel}.html`;
 }
+
 
 
 function checkWin() {
