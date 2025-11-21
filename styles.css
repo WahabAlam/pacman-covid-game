@@ -35,20 +35,15 @@ body {
   display: block;
   flex-shrink: 0;
 
-  /* Let the game scale nicely on bigger screens */
-  width: 90vmin;       /* 90% of the smaller viewport dimension */
-  max-width: 70vmin;   /* when panel is visible, keep it a bit smaller */
-  height: auto;        /* keep aspect ratio based on the JS-set size */
+  /* Make the game fill more of the iframe */
+  width: 95vmin;
+  max-width: 95vmin;   /* was 70vmin – this is what made it small */
+  height: auto;
 
-  /* NEW: tight outer "second wall" right at the edge of the maze */
-  border: 1px solid #0044ff;   /* thin blue border = outer wall */
-  border-radius: 3px;
-
-  /* Smaller, closer glow so it hugs the border instead of floating far out */
-  box-shadow:
-    0 0 10px rgba(0, 191, 255, 0.45),
-    0 0 20px rgba(0, 90, 200, 0.35);
+  box-shadow: 0 0 16px rgba(0, 191, 255, 0.5);
+  border-radius: 8px;
 }
+
 
 
 /* ===== Side panel styling ===== */
