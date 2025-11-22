@@ -14,6 +14,8 @@ window.LEVEL_CONFIG = window.LEVEL_CONFIG || {
 
 const WIX_HOME_URL = "https://shadasalah29.wixsite.com/covid19-interactive";
 
+// ---- Level gate state (NEW) ----
+let gateBlocked = false;
 
 // ----- Level gate: don't allow skipping levels -----
 (function enforceLevelProgression() {
@@ -24,15 +26,10 @@ const WIX_HOME_URL = "https://shadasalah29.wixsite.com/covid19-interactive";
 
   // To play level N (>1), you must have completed at least level N-1
   if (currentLevel > 1 && highestCompleted < currentLevel - 1) {
-    // Just send them back to the Wix home page in THIS tab
-    if (WIX_HOME_URL) {
-      window.location.href = WIX_HOME_URL;
-    } else {
-      window.location.href = "level1.html"; // fallback
-    }
+    // Instead of instantly redirecting, mark this level as blocked.
+    gateBlocked = true;
   }
 })();
-
 
 // Logical tile size
 const TILE_SIZE = 24;
@@ -152,10 +149,13 @@ function triggerMeme() {
 }
 
 // ----- Game State -----
-// gameState can be: "intro", "playing", "dead", "gameover", "win", "paused"
+// gameState can be: "intro", "playing", "dead", "gameover", "win", "paused", "gateBlocked"
 let score = 0;
 let lives = 3;
 let gameState = "playing";
+if (gateBlocked) {
+  gameState = "gateBlocked";
+}
 const PACMAN_SPEED = 7;
 const GHOST_SPEED_BASE = 4;
 const GHOST_SPEED =
@@ -239,8 +239,6 @@ function getLevelIntroLines() {
 }
 
 // ----- Virus room (ghost house) geometry -----
-// Door is the path tile just above the center of the 1×4 indent:
-// indent is cols 12–15 => center at col 13.5 -> door tile row 5, col 13.
 const GHOST_DOOR_X = 13.5; // col 13
 const GHOST_DOOR_Y = 5.5;  // row 5
 
@@ -256,19 +254,12 @@ const HOME_TILES = [
 function makeGhost(type, spawnX, spawnY, homeX = spawnX, homeY = spawnY) {
   return {
     type,
-
-    // current position
     x: spawnX,
     y: spawnY,
-
-    // where they spawn on new life
     spawnX,
     spawnY,
-
-    // where they wait / return after being eaten
     homeX,
     homeY,
-
     dirX: 0,
     dirY: 0,
     speed: GHOST_SPEED,
@@ -279,9 +270,7 @@ function makeGhost(type, spawnX, spawnY, homeX = spawnX, homeY = spawnY) {
   };
 }
 
-// ----- Ghost setup (supports per-level ghost count) -----
-// All 4 viruses spawn INSIDE the 1×4 room.
-// Red has release delay 0 so he pops out immediately through the door.
+// ----- Ghost setup -----
 const ALL_GHOSTS = [
   makeGhost("red",    HOME_TILES[0].x, HOME_TILES[0].y, HOME_TILES[0].x, HOME_TILES[0].y),
   makeGhost("pink",   HOME_TILES[1].x, HOME_TILES[1].y, HOME_TILES[1].x, HOME_TILES[1].y),
@@ -299,7 +288,6 @@ const ghostReleaseDelays = GHOST_RELEASE_DELAYS_BASE.slice(0, ghosts.length);
 ghosts.forEach((g, i) => {
   g.releaseTimer = ghostReleaseDelays[i];
   if (i === 0) {
-    // red: starts in room but is released immediately
     g.released = true;
     g.x = GHOST_DOOR_X;
     g.y = GHOST_DOOR_Y;
@@ -312,6 +300,14 @@ ghosts.forEach((g, i) => {
 
 // ----- Input -----
 window.addEventListener("keydown", e => {
+  // 🔹 If this level is locked, any confirm key sends back to home.
+  if (gameState === "gateBlocked") {
+    if (e.key === " " || e.key === "Enter" || e.key === "Escape") {
+      window.location.href = WIX_HOME_URL || "home-level-select.html";
+    }
+    return;
+  }
+
   // Intro popup (all levels)
   if (
     gameState === "intro" &&
@@ -354,6 +350,13 @@ window.addEventListener("keydown", e => {
   } else if ((gameState === "gameover" || gameState === "win") &&
              (e.key === "r" || e.key === "R")) {
     restartGame();
+  }
+});
+
+// Also allow mouse click to confirm on blocked level.
+canvas.addEventListener("click", () => {
+  if (gameState === "gateBlocked") {
+    window.location.href = WIX_HOME_URL || "home-level-select.html";
   }
 });
 
@@ -437,7 +440,7 @@ function updatePacman(dt) {
       sndEatFruit.play().catch(() => {});
       triggerMeme();
 
-      // 🔹 Level 4: when the LAST power pellet is eaten, spawn syringe
+      // Level 4: when the LAST power pellet is eaten, spawn syringe
       const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
       if (currentLevel === SYRINGE_LEVEL &&
           remainingPowerPellets() === 0 &&
@@ -455,7 +458,7 @@ function updatePacman(dt) {
     chompPlaying = false;
   }
 
-  // 🔹 Level 4: check if Pac-Man picks up the syringe
+  // Level 4: check if Pac-Man picks up the syringe
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
   if (currentLevel === SYRINGE_LEVEL &&
       syringeActive &&
@@ -544,13 +547,11 @@ function updateGhosts(dt) {
       g.releaseTimer -= dt;
       if (g.releaseTimer <= 0) {
         g.released = true;
-        // When a virus leaves the room, it exits through the door tile
         g.x = GHOST_DOOR_X;
         g.y = GHOST_DOOR_Y;
         g.dirX = 0;
-        g.dirY = 1; // move down into the maze
+        g.dirY = 1;
       } else {
-        // Still waiting in the 1×4 indent
         return;
       }
     }
@@ -573,12 +574,11 @@ function updateGhosts(dt) {
         sndEatGhost.currentTime = 0;
         sndEatGhost.play().catch(() => {});
 
-        // Send virus back into its home tile in the indent
         g.x = g.homeX;
         g.y = g.homeY;
         g.dirX = 0;
         g.dirY = 0;
-        g.releaseTimer = 4; // wait before joining again
+        g.releaseTimer = 4;
         g.released = false;
       } else if (!g.frightened) {
         handleDeath();
@@ -623,7 +623,6 @@ function resetAfterDeath() {
     g.eaten = false;
     g.releaseTimer = ghostReleaseDelays[i];
     if (i === 0) {
-      // red is immediately active – pop out through the door
       g.released = true;
       g.x = GHOST_DOOR_X;
       g.y = GHOST_DOOR_Y;
@@ -653,17 +652,21 @@ function restartGame() {
   pacman.power = false;
   pacman.powerTimer = 0;
 
-  resetSyringe();   // 🔹 reset syringe state on restart
-  resetAfterDeath();      // puts Pac-Man & ghosts back and sets gameState="playing"
+  resetSyringe();
+  resetAfterDeath();
 
-  // 🔹 ALL levels: start in intro instead of immediately playing
-  gameState = "intro";
+  // ALL levels: start in intro, except blocked levels stay blocked
+  if (gateBlocked) {
+    gameState = "gateBlocked";
+  } else {
+    gameState = "intro";
+  }
 }
 
 function triggerWin() {
   gameState = "win";
 
-  // 🔇 Stop all sounds so nothing keeps playing in the background
+  // Stop sounds so nothing keeps playing in the background
   sndChomp.pause();  sndChomp.currentTime = 0;
   sndDeath.pause();  sndDeath.currentTime = 0;
   sndEatFruit.pause(); sndEatFruit.currentTime = 0;
@@ -686,7 +689,6 @@ function triggerWin() {
   const target = wixInfoUrls[currentLevel];
 
   if (target) {
-    // Try to navigate the TOP window (for Wix iframe) in the SAME tab
     try {
       if (window.top && window.top !== window) {
         window.top.location.href = target;
@@ -703,11 +705,10 @@ function triggerWin() {
   window.location.href = `info${currentLevel}.html`;
 }
 
-
 function checkWin() {
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
 
-  // 🔹 Level 4: pellets no longer cause a win; syringe does instead.
+  // Level 4: pellets no longer cause a win; syringe does instead.
   if (currentLevel === SYRINGE_LEVEL) {
     return;
   }
@@ -730,23 +731,19 @@ function drawMaze() {
   ctx.fillStyle = "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // ============================================
   // 1) Draw Pac-Man style walls
-  // ============================================
   ctx.save();
-  ctx.strokeStyle = "#1c3ad5";   // wall blue
-  ctx.lineWidth = 3;             // thinner walls
-  ctx.setLineDash([]);           // solid
+  ctx.strokeStyle = "#1c3ad5";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // softer glow
   ctx.shadowColor = "rgba(28, 58, 213, 0.8)";
   ctx.shadowBlur  = 6;
 
   const inset = 0;
 
-  // we'll track the outermost wall bounds
   let minRow = ROWS, maxRow = -1;
   let minCol = COLS, maxCol = -1;
 
@@ -761,7 +758,6 @@ function drawMaze() {
       const chTemplate = MAZE_TEMPLATE[r][c];
       if (chTemplate !== "#") continue;
 
-      // update bounding box of all wall tiles
       if (r < minRow) minRow = r;
       if (r > maxRow) maxRow = r;
       if (c < minCol) minCol = c;
@@ -775,22 +771,18 @@ function drawMaze() {
       const top    = y + inset;
       const bottom = y + TILE_SIZE - inset;
 
-      // top side
       if (!isWallTemplate(r - 1, c)) {
         ctx.moveTo(left, top);
         ctx.lineTo(right, top);
       }
-      // bottom
       if (!isWallTemplate(r + 1, c)) {
         ctx.moveTo(left, bottom);
         ctx.lineTo(right, bottom);
       }
-      // left
       if (!isWallTemplate(r, c - 1)) {
         ctx.moveTo(left, top);
         ctx.lineTo(left, bottom);
       }
-      // right
       if (!isWallTemplate(r, c + 1)) {
         ctx.moveTo(right, top);
         ctx.lineTo(right, bottom);
@@ -800,17 +792,13 @@ function drawMaze() {
 
   ctx.stroke();
 
-  // ============================================
-  // 1b) Draw a tight inner rectangle (double wall)
-  //     right inside the maze’s outer walls
-  // ============================================
+  // 1b) Tight inner rectangle (double wall)
   if (minRow <= maxRow && minCol <= maxCol) {
     const outerLeft   = minCol * TILE_SIZE;
     const outerRight  = (maxCol + 1) * TILE_SIZE;
     const outerTop    = minRow * TILE_SIZE;
     const outerBottom = (maxRow + 1) * TILE_SIZE;
 
-    // small gap so it hugs the game wall
     const gap = TILE_SIZE * 0.3;
     const innerLeft   = outerLeft + gap;
     const innerRight  = outerRight - gap;
@@ -828,33 +816,28 @@ function drawMaze() {
 
   ctx.restore();
 
-  // ============================================
   // 2) Draw pellets and power pills
-  // ============================================
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const tileCurrent = maze[r][c];
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      // normal pellets
       // normal pellets – brighter & larger with a glow
       if (tileCurrent === "." && !isGhostHouseTile(r, c)) {
         const cx = x + TILE_SIZE / 2;
         const cy = y + TILE_SIZE / 2;
 
-        // bright glowing dot behind the pellet
         ctx.save();
-        ctx.fillStyle = "#fff6a0"; // bright yellow-ish
+        ctx.fillStyle = "#fff6a0";
         ctx.shadowColor = "rgba(255, 255, 180, 0.9)";
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(cx, cy, TILE_SIZE * 0.16, 0, Math.PI * 2); // a bit bigger than before
+        ctx.arc(cx, cy, TILE_SIZE * 0.16, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // draw the pellet image slightly larger on top (or fallback circle)
-        const size = TILE_SIZE * 0.4; // was 0.3 → more visible
+        const size = TILE_SIZE * 0.4;
         if (pelletImg.complete && pelletImg.naturalWidth) {
           ctx.drawImage(pelletImg, cx - size / 2, cy - size / 2, size, size);
         } else {
@@ -864,7 +847,6 @@ function drawMaze() {
           ctx.fill();
         }
       }
-
 
       // power pellets (pills)
       else if (tileCurrent === "o") {
@@ -884,7 +866,7 @@ function drawMaze() {
   }
 }
 
-// 🔹 Draw syringe (level 4)
+// Draw syringe (level 4)
 function drawSyringe() {
   if (!syringeActive) return;
 
@@ -948,7 +930,28 @@ function drawHUD() {
   if (scoreEl) scoreEl.textContent = score;
   if (livesEl) livesEl.textContent = lives;
 
-  if (gameState === "gameover" || gameState === "win") {
+  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+
+  if (gameState === "gateBlocked") {
+    // Popup when player tries to access a locked level
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(0, canvas.height / 2 - 80, canvas.width, 160);
+    ctx.fillStyle = "#fff";
+    ctx.font = "28px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("You can’t skip levels!", canvas.width / 2, canvas.height / 2 - 25);
+    ctx.font = "18px Arial";
+    ctx.fillText(
+      `Please complete Level ${currentLevel - 1} first.`,
+      canvas.width / 2,
+      canvas.height / 2 + 5
+    );
+    ctx.fillText(
+      "Press Space / Enter or click to go back.",
+      canvas.width / 2,
+      canvas.height / 2 + 35
+    );
+  } else if (gameState === "gameover" || gameState === "win") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
     ctx.fillStyle = "#fff";
@@ -984,11 +987,9 @@ function drawHUD() {
     ctx.fillStyle = "#fff";
     ctx.textAlign = "center";
 
-    // Title
     ctx.font = "30px Arial";
     ctx.fillText(lines[0], canvas.width / 2, canvas.height / 2 - 40);
 
-    // Body lines
     ctx.font = "18px Arial";
     for (let i = 1; i < lines.length; i++) {
       ctx.fillText(lines[i], canvas.width / 2, canvas.height / 2 - 40 + i * 24);
@@ -1028,7 +1029,7 @@ function gameLoop(timestamp) {
   }
 
   drawMaze();
-  drawSyringe();   // 🔹 draw syringe if active (level 4)
+  drawSyringe();
   drawPacman();
   drawGhosts();
   drawHUD();
@@ -1040,5 +1041,5 @@ function gameLoop(timestamp) {
 }
 
 // Start the game
-restartGame();          // sets gameState = "intro" for the current level
+restartGame();   // sets gameState = "intro" or "gateBlocked"
 requestAnimationFrame(gameLoop);
