@@ -734,14 +734,14 @@ function drawMaze() {
   // 1) Draw Pac-Man style walls
   // ============================================
   ctx.save();
-  ctx.strokeStyle = "#0044ff";   // wall blue
+  ctx.strokeStyle = "#1c3ad5";   // wall blue
   ctx.lineWidth = 3;             // thinner walls
   ctx.setLineDash([]);           // solid
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
   // softer glow
-  ctx.shadowColor = "rgba(0, 120, 255, 0.8)";
+  ctx.shadowColor = "rgba(28, 58, 213, 0.8)";
   ctx.shadowBlur  = 6;
 
   const inset = 0;
