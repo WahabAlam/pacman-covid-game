@@ -157,7 +157,9 @@ let score = 0;
 let lives = 3;
 let gameState = "playing";
 const PACMAN_SPEED = 7;
-const GHOST_SPEED  = 6;
+const GHOST_SPEED_BASE = 4;
+const GHOST_SPEED =
+  GHOST_SPEED_BASE * (window.LEVEL_CONFIG.ghostSpeedMultiplier || 1);
 const POWER_DURATION = 7;
 
 // Pac-Man object
@@ -332,7 +334,7 @@ window.addEventListener("keydown", e => {
   // Home from pause
   if (gameState === "paused") {
     if (e.key === "h" || e.key === "H") {
-      window.location.href = "home-level-select.html";
+      window.location.href = WIX_HOME_URL || "home-level-select.html";
     }
     return;
   }
