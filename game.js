@@ -14,8 +14,11 @@ window.LEVEL_CONFIG = window.LEVEL_CONFIG || {
 
 const WIX_HOME_URL = "https://shadasalah29.wixsite.com/covid19-interactive";
 
-// ---- Level gate state (NEW) ----
+// ---- Level gate state ----
 let gateBlocked = false;
+
+// 🔹 NEW: will hold the URL of the info page after a win
+let pendingInfoUrl = null;
 
 // ----- Level gate: don't allow skipping levels -----
 (function enforceLevelProgression() {
@@ -26,7 +29,6 @@ let gateBlocked = false;
 
   // To play level N (>1), you must have completed at least level N-1
   if (currentLevel > 1 && highestCompleted < currentLevel - 1) {
-    // Instead of instantly redirecting, mark this level as blocked.
     gateBlocked = true;
   }
 })();
@@ -35,15 +37,14 @@ let gateBlocked = false;
 const TILE_SIZE = 24;
 
 // ----- Classic-style Maze -----
-// # = wall, . = pellet, o = power pellet, ' ' = empty path
 const MAZE_TEMPLATE = [
   "############################", // 0
-  "#..........................#", // 1  <-- opened middle, full top path
+  "#..........................#", // 1
   "#.##########.##.##########.#", // 2
   "#......##....##....##......#", // 3
   "###.##.##.########.##.##.###", // 4
   "#o..##................##..o#", // 5
-  "#.####.##.##    ##.##.####.#", // 6  // virus room row stays the same
+  "#.####.##.##    ##.##.####.#", // 6
   "#.####.##.########.##.####.#", // 7
   "#.####.##.########.##.####.#", // 8
   "#..........................#", // 9
@@ -54,7 +55,7 @@ const MAZE_TEMPLATE = [
   "###.##.##.########.##.##.###", // 14
   "#......##....##....##......#", // 15
   "#.##########.##.##########.#", // 16
-  "#..........................#", // 17  <-- full bottom path, Pac-Man spawn row
+  "#..........................#", // 17
   "############################"  // 18
 ];
 
@@ -67,15 +68,12 @@ canvas.height = ROWS * TILE_SIZE;
 const maze = MAZE_TEMPLATE.map(row => row.split(""));
 
 // ----- Tile helpers -----
-
-// Virus room: row 6, columns 12–15 (1×4 indent)
 function isGhostHouseTile(row, col) {
   return row === 6 && col >= 12 && col <= 15;
 }
 
 function isWall(row, col) {
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return true;
-  // treat the virus room tiles as blocked for normal movement
   return maze[row][col] === "#" || isGhostHouseTile(row, col);
 }
 
@@ -152,10 +150,8 @@ function triggerMeme() {
 // gameState can be: "intro", "playing", "dead", "gameover", "win", "paused", "gateBlocked"
 let score = 0;
 let lives = 3;
-let gameState = "playing";
-if (gateBlocked) {
-  gameState = "gateBlocked";
-}
+let gameState = gateBlocked ? "gateBlocked" : "playing";
+
 const PACMAN_SPEED = 7;
 const GHOST_SPEED_BASE = 4;
 const GHOST_SPEED =
@@ -239,10 +235,9 @@ function getLevelIntroLines() {
 }
 
 // ----- Virus room (ghost house) geometry -----
-const GHOST_DOOR_X = 13.5; // col 13
-const GHOST_DOOR_Y = 5.5;  // row 5
+const GHOST_DOOR_X = 13.5;
+const GHOST_DOOR_Y = 5.5;
 
-// Home tiles inside the 1×4 indent (row 6)
 const HOME_TILES = [
   { x: 12.5, y: 6.5 },
   { x: 13.5, y: 6.5 },
@@ -250,7 +245,6 @@ const HOME_TILES = [
   { x: 15.5, y: 6.5 }
 ];
 
-// Helper: create virus/ghost
 function makeGhost(type, spawnX, spawnY, homeX = spawnX, homeY = spawnY) {
   return {
     type,
@@ -270,7 +264,6 @@ function makeGhost(type, spawnX, spawnY, homeX = spawnX, homeY = spawnY) {
   };
 }
 
-// ----- Ghost setup -----
 const ALL_GHOSTS = [
   makeGhost("red",    HOME_TILES[0].x, HOME_TILES[0].y, HOME_TILES[0].x, HOME_TILES[0].y),
   makeGhost("pink",   HOME_TILES[1].x, HOME_TILES[1].y, HOME_TILES[1].x, HOME_TILES[1].y),
@@ -278,13 +271,11 @@ const ALL_GHOSTS = [
   makeGhost("orange", HOME_TILES[3].x, HOME_TILES[3].y, HOME_TILES[3].x, HOME_TILES[3].y)
 ];
 
-// Base release delays in SECONDS
 const GHOST_RELEASE_DELAYS_BASE = [0, 2, 4, 6];
 
 const ghosts = ALL_GHOSTS.slice(0, window.LEVEL_CONFIG.ghostsEnabled);
 const ghostReleaseDelays = GHOST_RELEASE_DELAYS_BASE.slice(0, ghosts.length);
 
-// Initial release state
 ghosts.forEach((g, i) => {
   g.releaseTimer = ghostReleaseDelays[i];
   if (i === 0) {
@@ -300,12 +291,34 @@ ghosts.forEach((g, i) => {
 
 // ----- Input -----
 window.addEventListener("keydown", e => {
-  // 🔹 If this level is locked, any confirm key sends back to home.
+  // 🔹 If this level is locked, confirm to go home
   if (gameState === "gateBlocked") {
     if (e.key === " " || e.key === "Enter" || e.key === "Escape") {
       window.location.href = WIX_HOME_URL || "home-level-select.html";
     }
     return;
+  }
+
+  // 🔹 If we are in win state, handle next-info / replay
+  if (gameState === "win") {
+    if (e.key === " " || e.key === "Enter") {
+      if (pendingInfoUrl) {
+        try {
+          if (window.top && window.top !== window) {
+            window.top.location.href = pendingInfoUrl;
+          } else {
+            window.location.href = pendingInfoUrl;
+          }
+        } catch (err) {
+          window.location.href = pendingInfoUrl;
+        }
+      }
+      return;
+    }
+    if (e.key === "r" || e.key === "R") {
+      restartGame();
+      return;
+    }
   }
 
   // Intro popup (all levels)
@@ -347,8 +360,8 @@ window.addEventListener("keydown", e => {
 
   if (gameState === "dead" && e.key === " ") {
     resetAfterDeath();
-  } else if ((gameState === "gameover" || gameState === "win") &&
-             (e.key === "r" || e.key === "R")) {
+  } else if (gameState === "gameover" && (e.key === "r" || e.key === "R")) {
+    // gameover still uses R to restart
     restartGame();
   }
 });
@@ -440,7 +453,6 @@ function updatePacman(dt) {
       sndEatFruit.play().catch(() => {});
       triggerMeme();
 
-      // Level 4: when the LAST power pellet is eaten, spawn syringe
       const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
       if (currentLevel === SYRINGE_LEVEL &&
           remainingPowerPellets() === 0 &&
@@ -458,7 +470,6 @@ function updatePacman(dt) {
     chompPlaying = false;
   }
 
-  // Level 4: check if Pac-Man picks up the syringe
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
   if (currentLevel === SYRINGE_LEVEL &&
       syringeActive &&
@@ -466,7 +477,7 @@ function updatePacman(dt) {
       col === syringeCol) {
 
     syringeActive = false;
-    score += 200; // tweak if you like
+    score += 200;
     sndEatFruit.currentTime = 0;
     sndEatFruit.play().catch(() => {});
     triggerWin();
@@ -542,7 +553,6 @@ function updateGhosts(dt) {
   if (gameState !== "playing") return;
 
   ghosts.forEach(g => {
-    // 1) Handle delayed release from the room
     if (!g.released) {
       g.releaseTimer -= dt;
       if (g.releaseTimer <= 0) {
@@ -556,13 +566,11 @@ function updateGhosts(dt) {
       }
     }
 
-    // 2) Normal movement / frightened slowdown
     const baseSpeed = g.frightened ? GHOST_SPEED * 0.7 : GHOST_SPEED;
     g.speed = baseSpeed;
     chooseGhostDirection(g);
     moveEntity(g, dt);
 
-    // 3) Collision with Pac-Man
     const dx = g.x - pacman.x;
     const dy = g.y - pacman.y;
     const dist2 = dx * dx + dy * dy;
@@ -603,7 +611,6 @@ function handleDeath() {
 }
 
 function resetAfterDeath() {
-  // reset pacman
   pacman.x = 13.5;
   pacman.y = 17.5;
   pacman.dirX = 0;
@@ -613,7 +620,6 @@ function resetAfterDeath() {
   pacman.power = false;
   pacman.powerTimer = 0;
 
-  // reset ghosts to their spawn positions
   ghosts.forEach((g, i) => {
     g.x = g.spawnX;
     g.y = g.spawnY;
@@ -636,7 +642,6 @@ function resetAfterDeath() {
 }
 
 function restartGame() {
-  // reset maze pellets
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const ch = MAZE_TEMPLATE[r][c];
@@ -655,7 +660,8 @@ function restartGame() {
   resetSyringe();
   resetAfterDeath();
 
-  // ALL levels: start in intro, except blocked levels stay blocked
+  pendingInfoUrl = null;
+
   if (gateBlocked) {
     gameState = "gateBlocked";
   } else {
@@ -666,7 +672,7 @@ function restartGame() {
 function triggerWin() {
   gameState = "win";
 
-  // Stop sounds so nothing keeps playing in the background
+  // Stop all sounds
   sndChomp.pause();  sndChomp.currentTime = 0;
   sndDeath.pause();  sndDeath.currentTime = 0;
   sndEatFruit.pause(); sndEatFruit.currentTime = 0;
@@ -678,7 +684,6 @@ function triggerWin() {
     localStorage.setItem("levelCompleted", currentLevel);
   }
 
-  // Map levels to Wix info pages
   const wixInfoUrls = {
     1: "https://shadasalah29.wixsite.com/covid19-interactive/about-1",
     2: "https://shadasalah29.wixsite.com/covid19-interactive/level-2",
@@ -686,34 +691,19 @@ function triggerWin() {
     4: "https://shadasalah29.wixsite.com/covid19-interactive/level-4"
   };
 
-  const target = wixInfoUrls[currentLevel];
+  const fallback = `info${currentLevel}.html`;
 
-  if (target) {
-    try {
-      if (window.top && window.top !== window) {
-        window.top.location.href = target;
-      } else {
-        window.location.href = target;
-      }
-    } catch (e) {
-      window.location.href = target;
-    }
-    return;
-  }
-
-  // Fallback if no Wix URL defined
-  window.location.href = `info${currentLevel}.html`;
+  // 🔹 NEW: store target URL, but DO NOT navigate yet
+  pendingInfoUrl = wixInfoUrls[currentLevel] || fallback;
 }
 
 function checkWin() {
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
 
-  // Level 4: pellets no longer cause a win; syringe does instead.
   if (currentLevel === SYRINGE_LEVEL) {
     return;
   }
 
-  // Other levels keep the classic "eat all pellets" rule.
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       if (maze[r][c] === "." || maze[r][c] === "o") {
@@ -727,23 +717,19 @@ function checkWin() {
 
 // ----- Drawing -----
 function drawMaze() {
-  // Black background everywhere
   ctx.fillStyle = "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 1) Draw Pac-Man style walls
   ctx.save();
   ctx.strokeStyle = "#1c3ad5";
   ctx.lineWidth = 3;
   ctx.setLineDash([]);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-
   ctx.shadowColor = "rgba(28, 58, 213, 0.8)";
   ctx.shadowBlur  = 6;
 
   const inset = 0;
-
   let minRow = ROWS, maxRow = -1;
   let minCol = COLS, maxCol = -1;
 
@@ -792,7 +778,6 @@ function drawMaze() {
 
   ctx.stroke();
 
-  // 1b) Tight inner rectangle (double wall)
   if (minRow <= maxRow && minCol <= maxCol) {
     const outerLeft   = minCol * TILE_SIZE;
     const outerRight  = (maxCol + 1) * TILE_SIZE;
@@ -816,14 +801,13 @@ function drawMaze() {
 
   ctx.restore();
 
-  // 2) Draw pellets and power pills
+  // Pellets / power pellets
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const tileCurrent = maze[r][c];
       const x = c * TILE_SIZE;
       const y = r * TILE_SIZE;
 
-      // normal pellets – brighter & larger with a glow
       if (tileCurrent === "." && !isGhostHouseTile(r, c)) {
         const cx = x + TILE_SIZE / 2;
         const cy = y + TILE_SIZE / 2;
@@ -846,10 +830,7 @@ function drawMaze() {
           ctx.arc(cx, cy, TILE_SIZE * 0.18, 0, Math.PI * 2);
           ctx.fill();
         }
-      }
-
-      // power pellets (pills)
-      else if (tileCurrent === "o") {
+      } else if (tileCurrent === "o") {
         const cx = x + TILE_SIZE / 2;
         const cy = y + TILE_SIZE / 2;
         const size = TILE_SIZE * 1.2;
@@ -933,7 +914,6 @@ function drawHUD() {
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
 
   if (gameState === "gateBlocked") {
-    // Popup when player tries to access a locked level
     ctx.fillStyle = "rgba(0,0,0,0.75)";
     ctx.fillRect(0, canvas.height / 2 - 80, canvas.width, 160);
     ctx.fillStyle = "#fff";
@@ -951,16 +931,23 @@ function drawHUD() {
       canvas.width / 2,
       canvas.height / 2 + 35
     );
-  } else if (gameState === "gameover" || gameState === "win") {
+  } else if (gameState === "gameover") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
     ctx.fillStyle = "#fff";
     ctx.font = "32px Arial";
     ctx.textAlign = "center";
-    const text = gameState === "gameover"
-      ? "GAME OVER - Press R"
-      : "YOU WIN! - Press R";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillText("GAME OVER - Press R", canvas.width / 2, canvas.height / 2);
+  } else if (gameState === "win") {
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, canvas.height / 2 - 70, canvas.width, 140);
+    ctx.fillStyle = "#fff";
+    ctx.font = "32px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2 - 10);
+    ctx.font = "20px Arial";
+    ctx.fillText("Space / Enter → Info Page", canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText("R → Replay Level", canvas.width / 2, canvas.height / 2 + 45);
   } else if (gameState === "dead") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
@@ -978,7 +965,6 @@ function drawHUD() {
     ctx.font = "20px Arial";
     ctx.fillText("Press P to Resume or H for Home", canvas.width / 2, canvas.height / 2 + 25);
   } else if (gameState === "intro") {
-    // Generic level intro popup (all levels)
     const lines = getLevelIntroLines();
 
     ctx.fillStyle = "rgba(0,0,0,0.7)";
