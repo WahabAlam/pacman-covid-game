@@ -99,6 +99,13 @@ function loadImage(path) {
 const pelletImg = loadImage("img/pellet.png");
 const powerPelletImg = loadImage("img/power_pellet2.png");
 
+// 🔹 Syringe (level 4 objective)
+const SYRINGE_LEVEL = 4;
+const syringeImg = loadImage("img/syringe.png");
+let syringeActive = false;
+let syringeRow = null;
+let syringeCol = null;
+
 // ----- Per-level facts & questions -----
 const FACTS_BY_LEVEL = {
   1: [
@@ -160,7 +167,7 @@ const QUESTIONS_BY_LEVEL = {
 // ----- Fact & question state -----
 let factsShownThisLevel = 0;
 let currentFactText = "";
-let pendingQuestionAfterFact = false;
+let pendingQuestionAfterFact = false; // meaning differs by level (see confirmFactAdvance)
 
 let currentQuestion = null;
 let questionAttempts = 0;   // max 2
@@ -170,9 +177,6 @@ let questionFeedback = "";
 let factOverlay, factTextEl, factOkBtn;
 let questionOverlay, questionTitleEl, questionTextEl, questionHintEl, questionFeedbackEl, questionYesBtn, questionNoBtn;
 let questionResultOverlay, questionResultTextEl, questionResultContinueBtn;
-
-// Create overlays once
-createUIOverlays();
 
 // Pac-Man sprites
 const pacmanSprites = {
@@ -208,7 +212,7 @@ let score = 0;
 let lives = 3;
 let gameState = "playing";
 const PACMAN_SPEED = 7;
-const GHOST_SPEED_BASE = 5;
+const GHOST_SPEED_BASE = 4; // slower ghosts
 const GHOST_SPEED =
   GHOST_SPEED_BASE * (window.LEVEL_CONFIG.ghostSpeedMultiplier || 1);
 const POWER_DURATION = 7;
@@ -229,6 +233,34 @@ const pacman = {
   powerTimer: 0
 };
 
+// ----- Syringe helpers -----
+function resetSyringe() {
+  syringeActive = false;
+  syringeRow = null;
+  syringeCol = null;
+}
+
+function spawnSyringe() {
+  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+  if (currentLevel !== SYRINGE_LEVEL) return;
+  if (syringeActive) return;
+
+  const candidates = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!isWalkable(r, c)) continue;
+      if (isGhostHouseTile(r, c)) continue;
+      candidates.push({ r, c });
+    }
+  }
+  if (!candidates.length) return;
+
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  syringeRow = pick.r;
+  syringeCol = pick.c;
+  syringeActive = true;
+}
+
 // ----- Level intro text helper -----
 function getLevelIntroLines() {
   const lvl = window.LEVEL_CONFIG.levelNumber || 1;
@@ -237,7 +269,9 @@ function getLevelIntroLines() {
     `Level ${lvl}`,
     "Eat pellets for points.",
     "Eat the big pills to reveal COVID-19 facts.",
-    "After all 4 facts, answer a Yes/No question.",
+    ...(lvl === SYRINGE_LEVEL
+      ? ["After all 4 facts, a syringe appears.", "Grab it to unlock your quiz question."]
+      : ["After all 4 facts, answer a Yes/No question."]),
     "Press Space / Enter / P to start"
   ];
 }
@@ -306,6 +340,7 @@ function handlePowerPelletFact() {
   if (factsShownThisLevel < facts.length) {
     currentFactText = facts[factsShownThisLevel];
     factsShownThisLevel++;
+    // Last fact?
     pendingQuestionAfterFact = (factsShownThisLevel === facts.length);
     gameState = "fact";
     showFactOverlay(currentFactText);
@@ -626,9 +661,19 @@ function hideFactOverlay() {
 function confirmFactAdvance() {
   if (gameState !== "fact") return;
   hideFactOverlay();
+
+  const lvl = window.LEVEL_CONFIG.levelNumber || 1;
+
   if (pendingQuestionAfterFact) {
     pendingQuestionAfterFact = false;
-    startQuestionPhase();
+    if (lvl === SYRINGE_LEVEL) {
+      // Level 4: after last fact, spawn syringe and resume play
+      spawnSyringe();
+      gameState = "playing";
+    } else {
+      // Levels 1–3: after last fact, go straight to question
+      startQuestionPhase();
+    }
   } else {
     gameState = "playing";
   }
@@ -662,6 +707,9 @@ function hideQuestionResultOverlay() {
   if (!questionResultOverlay) return;
   questionResultOverlay.style.display = "none";
 }
+
+// Create overlays once DOM exists
+createUIOverlays();
 
 // ----- Input (keyboard) -----
 window.addEventListener("keydown", e => {
@@ -823,8 +871,7 @@ function updatePacman(dt) {
       score += 50;
       pacman.power = true;
       pacman.powerTimer = POWER_DURATION;
-      ghosts.forEach(g => { g.f
-rightened = true; g.eaten = false; });
+      ghosts.forEach(g => { g.frightened = true; g.eaten = false; });
       sndEatFruit.currentTime = 0;
       sndEatFruit.play().catch(() => {});
 
@@ -837,6 +884,20 @@ rightened = true; g.eaten = false; });
     sndChomp.pause();
     sndChomp.currentTime = 0;
     chompPlaying = false;
+  }
+
+  // 🔹 Level 4: check syringe pickup, trigger question then
+  const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+  if (currentLevel === SYRINGE_LEVEL &&
+      syringeActive &&
+      row === syringeRow &&
+      col === syringeCol) {
+    syringeActive = false;
+    score += 200;
+    sndEatFruit.currentTime = 0;
+    sndEatFruit.play().catch(() => {});
+    // Now start the Yes/No question
+    startQuestionPhase();
   }
 
   if (pacman.power) {
@@ -997,9 +1058,10 @@ function resetAfterDeath() {
   gameState = "playing";
 }
 
-// checkWin now unused (learning is via facts + questions)
+// We no longer use pellet-based win
 function checkWin() {}
 
+// Restart whole level
 function restartGame() {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -1022,6 +1084,8 @@ function restartGame() {
   currentQuestion = null;
   questionAttempts = 0;
   questionFeedback = "";
+
+  resetSyringe();
 
   hideFactOverlay();
   hideQuestionOverlay();
@@ -1200,6 +1264,20 @@ function drawMaze() {
           ctx.fill();
         }
       }
+    }
+  }
+
+  // 🔹 Draw syringe (level 4) if active
+  if (syringeActive) {
+    const cx = (syringeCol + 0.5) * TILE_SIZE;
+    const cy = (syringeRow + 0.5) * TILE_SIZE;
+    const size = TILE_SIZE * 1.1;
+
+    if (syringeImg.complete && syringeImg.naturalWidth) {
+      ctx.drawImage(syringeImg, cx - size / 2, cy - size / 2, size, size);
+    } else {
+      ctx.fillStyle = "#00ff88";
+      ctx.fillRect(cx - size / 4, cy - size / 2, size / 2, size);
     }
   }
 }
