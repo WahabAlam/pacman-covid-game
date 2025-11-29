@@ -66,6 +66,26 @@ canvas.height = ROWS * TILE_SIZE;
 // ----- Maze grid (mutable pellets) -----
 const maze = MAZE_TEMPLATE.map(row => row.split(""));
 
+// 🔹 Count how many power pellets ("o") exist in the original template
+const ORIGINAL_POWER_PELLET_COUNT = (function () {
+  let count = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (MAZE_TEMPLATE[r][c] === "o") {
+        count++;
+      }
+    }
+  }
+  return count;
+})();
+
+// 🔹 Minimum distance between power pellets (in tiles)
+const MIN_POWER_PELLET_DISTANCE_TILES = 10;
+
+// 🔹 Pac-Man start tile + minimum distance from start (in tiles)
+const PACMAN_START_TILE = { row: 17, col: 13 }; // x=13.5, y=17.5
+const MIN_PELLET_FROM_PACMAN_START_TILES = 10;
+
 // ----- Tile helpers -----
 function isGhostHouseTile(row, col) {
   return row === 6 && col >= 12 && col <= 15;
@@ -167,7 +187,7 @@ const QUESTIONS_BY_LEVEL = {
 // ----- Fact & question state -----
 let factsShownThisLevel = 0;
 let currentFactText = "";
-let pendingQuestionAfterFact = false; // meaning differs by level (see confirmFactAdvance)
+let pendingQuestionAfterFact = false;
 
 let currentQuestion = null;
 let questionAttempts = 0;   // max 2
@@ -202,6 +222,11 @@ const sndDeath        = new Audio("sounds/pacman_death.wav");
 const sndEatFruit     = new Audio("sounds/pacman_eatfruit.wav");
 const sndEatGhost     = new Audio("sounds/pacman_eatghost.wav");
 const sndIntermission = new Audio("sounds/pacman_intermission.wav");
+
+// 🎉 Cheer sound for level win (before questions)
+const sndCheer        = new Audio("sounds/cheer.mp3");
+sndCheer.loop = false;
+
 sndChomp.loop = true;
 let chompPlaying = false;
 
@@ -212,7 +237,7 @@ let score = 0;
 let lives = 3;
 let gameState = "playing";
 const PACMAN_SPEED = 7;
-const GHOST_SPEED_BASE = 4; // slower ghosts
+const GHOST_SPEED_BASE = 4;
 const GHOST_SPEED =
   GHOST_SPEED_BASE * (window.LEVEL_CONFIG.ghostSpeedMultiplier || 1);
 const POWER_DURATION = 7;
@@ -261,6 +286,86 @@ function spawnSyringe() {
   syringeActive = true;
 }
 
+// 🔧 Utility: shuffle an array in-place (Fisher–Yates)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = array[i];
+    array[i] = array[j];
+    array[j] = tmp;
+  }
+}
+
+// 🔹 Randomize power pellet ("big pill") positions
+function randomizePowerPellets() {
+  // Remove any existing 'o' from the maze
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (maze[r][c] === "o") {
+        maze[r][c] = ".";
+      }
+    }
+  }
+
+  const candidates = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!isWalkable(r, c)) continue;
+      if (isGhostHouseTile(r, c)) continue;
+      candidates.push({ r, c });
+    }
+  }
+
+  shuffleArray(candidates);
+
+  const minDistSq =
+    MIN_POWER_PELLET_DISTANCE_TILES * MIN_POWER_PELLET_DISTANCE_TILES;
+  const minFromStartSq =
+    MIN_PELLET_FROM_PACMAN_START_TILES * MIN_PELLET_FROM_PACMAN_START_TILES;
+
+  let remaining = Math.min(ORIGINAL_POWER_PELLET_COUNT, candidates.length);
+  const placed = [];
+
+  // First pass: enforce spacing + distance from Pac-Man start
+  for (let i = 0; i < candidates.length && remaining > 0; i++) {
+    const { r, c } = candidates[i];
+
+    const dsr = r - PACMAN_START_TILE.row;
+    const dsc = c - PACMAN_START_TILE.col;
+    if (dsr * dsr + dsc * dsc < minFromStartSq) continue;
+
+    let ok = true;
+    for (const p of placed) {
+      const dr = r - p.r;
+      const dc = c - p.c;
+      if (dr * dr + dc * dc < minDistSq) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) continue;
+
+    maze[r][c] = "o";
+    placed.push({ r, c });
+    remaining--;
+  }
+
+  // Fallback: still keep them away from Pac-Man start, ignore spacing
+  if (remaining > 0) {
+    for (let i = 0; i < candidates.length && remaining > 0; i++) {
+      const { r, c } = candidates[i];
+      if (maze[r][c] === "o") continue;
+
+      const dsr = r - PACMAN_START_TILE.row;
+      const dsc = c - PACMAN_START_TILE.col;
+      if (dsr * dsr + dsc * dsc < minFromStartSq) continue;
+
+      maze[r][c] = "o";
+      remaining--;
+    }
+  }
+}
+
 // ----- Level intro text helper -----
 function getLevelIntroLines() {
   const lvl = window.LEVEL_CONFIG.levelNumber || 1;
@@ -277,8 +382,8 @@ function getLevelIntroLines() {
 }
 
 // ----- Virus room (ghost house) geometry -----
-const GHOST_DOOR_X = 13.5; // col 13
-const GHOST_DOOR_Y = 5.5;  // row 5
+const GHOST_DOOR_X = 13.5;
+const GHOST_DOOR_Y = 5.5;
 
 const HOME_TILES = [
   { x: 12.5, y: 6.5 },
@@ -340,7 +445,6 @@ function handlePowerPelletFact() {
   if (factsShownThisLevel < facts.length) {
     currentFactText = facts[factsShownThisLevel];
     factsShownThisLevel++;
-    // Last fact?
     pendingQuestionAfterFact = (factsShownThisLevel === facts.length);
     gameState = "fact";
     showFactOverlay(currentFactText);
@@ -383,6 +487,35 @@ function handleQuestionAnswer(answerYes) {
   }
 }
 
+// 🔹 Cheer + YOU WIN banner, then questions
+function beginWinCheerThenQuestion() {
+  sndChomp.pause();  sndChomp.currentTime = 0;
+  sndDeath.pause();  sndDeath.currentTime = 0;
+  sndEatFruit.pause(); sndEatFruit.currentTime = 0;
+  sndEatGhost.pause(); sndEatGhost.currentTime = 0;
+
+  // Show YOU WIN text while cheer plays
+  gameState = "win";
+
+  sndCheer.onended = () => {
+    sndCheer.onended = null;
+    if (gameState === "win") {
+      startQuestionPhase();
+    }
+  };
+
+  try {
+    sndCheer.currentTime = 0;
+    sndCheer.play().catch(() => {
+      sndCheer.onended = null;
+      startQuestionPhase();
+    });
+  } catch (e) {
+    sndCheer.onended = null;
+    startQuestionPhase();
+  }
+}
+
 // ----- UI overlay creation & controls -----
 function createUIOverlays() {
   // FACT OVERLAY
@@ -404,19 +537,19 @@ function createUIOverlays() {
   const factPanel = document.createElement("div");
   Object.assign(factPanel.style, {
     background: "rgba(0,0,0,0.9)",
-    border: "2px solid #00ffff",
+    border: "2px solid #FF10F0",
     borderRadius: "16px",
     padding: "20px 30px",
     maxWidth: "600px",
     color: "#ffffff",
     textAlign: "center",
-    boxShadow: "0 0 20px rgba(0,255,255,0.6)"
+    boxShadow: "0 0 20px rgba(255, 16, 240,0.6)"
   });
 
   const factTitle = document.createElement("h2");
   factTitle.textContent = "Did you know?";
   Object.assign(factTitle.style, {
-    color: "#00ffff",
+    color: "#FF10F0",
     marginTop: "0",
     marginBottom: "12px"
   });
@@ -468,19 +601,19 @@ function createUIOverlays() {
   const qPanel = document.createElement("div");
   Object.assign(qPanel.style, {
     background: "rgba(0,0,0,0.9)",
-    border: "2px solid #00ffff",
+    border: "2px solid #FF10F0",
     borderRadius: "16px",
     padding: "20px 30px",
     maxWidth: "650px",
     color: "#ffffff",
     textAlign: "center",
-    boxShadow: "0 0 20px rgba(0,255,255,0.6)"
+    boxShadow: "0 0 20px rgba(255, 16, 240,0.6)"
   });
 
   questionTitleEl = document.createElement("h2");
   questionTitleEl.textContent = "Quick Check";
   Object.assign(questionTitleEl.style, {
-    color: "#00ffff",
+    color: "#FF10F0",
     marginTop: "0",
     marginBottom: "10px"
   });
@@ -589,19 +722,19 @@ function createUIOverlays() {
   const qrPanel = document.createElement("div");
   Object.assign(qrPanel.style, {
     background: "rgba(0,0,0,0.9)",
-    border: "2px solid #00ffff",
+    border: "2px solid #FF10F0",
     borderRadius: "16px",
     padding: "20px 30px",
     maxWidth: "600px",
     color: "#ffffff",
     textAlign: "center",
-    boxShadow: "0 0 20px rgba(0,255,255,0.6)"
+    boxShadow: "0 0 20px rgba(255, 16, 240,0.6)"
   });
 
   const qrTitle = document.createElement("h2");
   qrTitle.textContent = "Result";
   Object.assign(qrTitle.style, {
-    color: "#00ffff",
+    color: "#FF10F0",
     marginTop: "0",
     marginBottom: "12px"
   });
@@ -658,6 +791,10 @@ function hideFactOverlay() {
   factOverlay.style.display = "none";
 }
 
+// 🔹 Fact close logic:
+// Levels 1–3: after last fact → cheer + YOU WIN → then question
+// Level 4: after 4th fact → spawn syringe → play continues;
+//          later, syringe pickup → cheer + YOU WIN → then question
 function confirmFactAdvance() {
   if (gameState !== "fact") return;
   hideFactOverlay();
@@ -667,12 +804,12 @@ function confirmFactAdvance() {
   if (pendingQuestionAfterFact) {
     pendingQuestionAfterFact = false;
     if (lvl === SYRINGE_LEVEL) {
-      // Level 4: after last fact, spawn syringe and resume play
+      // Level 4: just spawn syringe now, question happens on syringe pickup
       spawnSyringe();
       gameState = "playing";
     } else {
-      // Levels 1–3: after last fact, go straight to question
-      startQuestionPhase();
+      // Levels 1–3: go straight into cheer + YOU WIN, then question
+      beginWinCheerThenQuestion();
     }
   } else {
     gameState = "playing";
@@ -886,8 +1023,9 @@ function updatePacman(dt) {
     chompPlaying = false;
   }
 
-  // 🔹 Level 4: check syringe pickup, trigger question then
   const currentLevel = window.LEVEL_CONFIG.levelNumber || 1;
+
+  // 🔹 Level 4: syringe pickup → cheer + YOU WIN, then question
   if (currentLevel === SYRINGE_LEVEL &&
       syringeActive &&
       row === syringeRow &&
@@ -896,8 +1034,7 @@ function updatePacman(dt) {
     score += 200;
     sndEatFruit.currentTime = 0;
     sndEatFruit.play().catch(() => {});
-    // Now start the Yes/No question
-    startQuestionPhase();
+    beginWinCheerThenQuestion();
   }
 
   if (pacman.power) {
@@ -1073,6 +1210,9 @@ function restartGame() {
       }
     }
   }
+
+  randomizePowerPellets();
+
   score = 0;
   lives = 3;
   pacman.power = false;
@@ -1116,22 +1256,17 @@ function triggerWin() {
     4: "https://shadasalah29.wixsite.com/covid19-interactive/level-4"
   };
 
-  const target = wixInfoUrls[currentLevel];
+  const target = wixInfoUrls[currentLevel] || `info${currentLevel}.html`;
 
-  if (target) {
-    try {
-      if (window.top && window.top !== window) {
-        window.top.location.href = target;
-      } else {
-        window.location.href = target;
-      }
-    } catch (e) {
+  try {
+    if (window.top && window.top !== window) {
+      window.top.location.href = target;
+    } else {
       window.location.href = target;
     }
-    return;
+  } catch (e) {
+    window.location.href = target;
   }
-
-  window.location.href = `info${currentLevel}.html`;
 }
 
 // ----- Drawing -----
@@ -1333,7 +1468,7 @@ function drawHUD() {
   if (gameState === "gameover" || gameState === "win") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = "#ffee00";
     ctx.font = "32px Arial";
     ctx.textAlign = "center";
     const text = gameState === "gameover"
@@ -1343,14 +1478,14 @@ function drawHUD() {
   } else if (gameState === "dead") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 40, canvas.width, 80);
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = "#ffee00";
     ctx.font = "32px Arial";
     ctx.textAlign = "center";
     ctx.fillText("You Died - Press Space", canvas.width / 2, canvas.height / 2);
   } else if (gameState === "paused") {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, canvas.height / 2 - 60, canvas.width, 120);
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = "#ffee00";
     ctx.font = "32px Arial";
     ctx.textAlign = "center";
     ctx.fillText("Paused", canvas.width / 2, canvas.height / 2 - 10);
@@ -1362,7 +1497,7 @@ function drawHUD() {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, canvas.height / 2 - 90, canvas.width, 180);
 
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = "#ffee00";
     ctx.textAlign = "center";
 
     ctx.font = "30px Arial";
